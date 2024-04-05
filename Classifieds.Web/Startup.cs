@@ -1,25 +1,26 @@
+using System;
 using Classifieds.Data;
 using Classifieds.Data.Entities;
 using Classifieds.Web.Services;
 using Classifieds.Web.Services.Identity;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Authentication.Facebook;
-using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Identity.UI;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using EntityFrameworkServiceCollectionExtensions =
+    Microsoft.Extensions.DependencyInjection.EntityFrameworkServiceCollectionExtensions;
+using IdentityEntityFrameworkBuilderExtensions =
+    Microsoft.Extensions.DependencyInjection.IdentityEntityFrameworkBuilderExtensions;
+using IdentityServiceCollectionUIExtensions =
+    Microsoft.Extensions.DependencyInjection.IdentityServiceCollectionUIExtensions;
+using IServiceCollection = Microsoft.Extensions.DependencyInjection.IServiceCollection;
+using ServiceCollectionServiceExtensions = Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions;
 
 namespace Classifieds.Web
 {
@@ -35,28 +36,44 @@ namespace Classifieds.Web
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddDbContext<ApplicationDbContext>(options =>
+            EntityFrameworkServiceCollectionExtensions.AddDbContext<ApplicationDbContext>(services, options =>
                 options.UseSqlServer(Configuration.GetConnectionString("DatabaseConnection"))
             );
 
-            services.AddTransient<IEmailSender>(s => new EmailSender("localhost", 25, "no-reply@classified.com"));
+            ServiceCollectionServiceExtensions.AddTransient<IEmailSender>(services,
+                s => new EmailSender("localhost", 25, "no-reply@classified.com"));
 
-            services.AddDefaultIdentity<User>(options =>
+            IdentityEntityFrameworkBuilderExtensions
+                .AddEntityFrameworkStores<ApplicationDbContext>(IdentityServiceCollectionUIExtensions
+                    .AddDefaultIdentity<User>(services, options =>
+                    {
+                        options.Password.RequireDigit = true;
+                        options.Password.RequiredLength = 8;
+                        options.Password.RequireUppercase = true;
+                        options.Password.RequireNonAlphanumeric = true;
+                        options.SignIn.RequireConfirmedAccount = true;
+
+                        options.Lockout.AllowedForNewUsers = true;
+                        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
+                        options.Lockout.MaxFailedAccessAttempts = 3;
+                    })
+                    .AddRoles<IdentityRole>())
+                .AddPasswordValidator<PasswordValidatorService>()
+                .AddClaimsPrincipalFactory<CustomClaimsService>();
+
+            // add policies
+            services.AddAuthorization(options =>
             {
-                options.Password.RequireDigit = true;
-                options.Password.RequiredLength = 8;
-                options.Password.RequireUppercase = true;
-                options.Password.RequireNonAlphanumeric = true;
-                options.SignIn.RequireConfirmedAccount = true;
+                // when filter is not specified, the default policy is used
+                options.FallbackPolicy = new AuthorizationPolicyBuilder()
+                    .RequireAuthenticatedUser()
+                    .Build();
+                options.AddPolicy(Policies.IsMinimumAge,
+                    policy => policy.RequireClaim(UserClaims.IsMinimumAge, "true"));
+            });
 
-                options.Lockout.AllowedForNewUsers = true;
-                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
-                options.Lockout.MaxFailedAccessAttempts = 3;
-            })
-                .AddEntityFrameworkStores<ApplicationDbContext>()
-                .AddPasswordValidator<PasswordValidatorService>();              
-            
-            services.AddRazorPages().AddMvcOptions(q => q.Filters.Add(new AuthorizeFilter()));
+            // services.AddRazorPages().AddMvcOptions(q => q.Filters.Add(new AuthorizeFilter()));
+            services.AddRazorPages();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -81,10 +98,7 @@ namespace Classifieds.Web
             app.UseAuthentication();
             app.UseAuthorization();
 
-            app.UseEndpoints(endpoints =>
-            {
-                endpoints.MapRazorPages();
-            });
+            app.UseEndpoints(endpoints => { endpoints.MapRazorPages(); });
         }
     }
 }

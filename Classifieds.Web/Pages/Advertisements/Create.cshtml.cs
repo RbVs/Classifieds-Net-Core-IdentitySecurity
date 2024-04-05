@@ -1,40 +1,48 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using System.Linq;
 using System.Threading.Tasks;
+using Classifieds.Data;
+using Classifieds.Data.Entities;
+using Classifieds.Web.Services.Identity;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using Classifieds.Data;
-using Classifieds.Data.Entities;
 
 namespace Classifieds.Web.Pages.Advertisements
 {
+    // limit access to this page to users who are of minimum age through the IsMinimumAge policy
+    [Authorize(Policy = Policies.IsMinimumAge)]
     public class CreateModel : PageModel
     {
-        private readonly Classifieds.Data.ApplicationDbContext _context;
+        private readonly ApplicationDbContext _context;
 
-        public CreateModel(Classifieds.Data.ApplicationDbContext context)
+        public CreateModel(ApplicationDbContext context)
         {
             _context = context;
         }
 
+        [BindProperty] public Advertisement Advertisement { get; set; }
+
         public IActionResult OnGet()
         {
-        ViewData["CategoryId"] = new SelectList(_context.Categories, "Id", "Name");
+            // // Claims can be accessed like this
+            // var isMinimumAge = User.Claims.FirstOrDefault(q=>q.Type == UserClaims.IsMinimumAge)?.Value;
+            // var isMinimumAgeAlternative = User.FindFirst(q=>q.Type == UserClaims.IsMinimumAge)?.Value;
+            //
+            // // If the user is not of minimum age, redirect to AccessDenied page
+            // if (isMinimumAge == null || bool.Parse(isMinimumAge) == false)
+            // {
+            //     return RedirectToPage("/Identity/Account/AccessDenied");
+            // }
+
+            ViewData["CategoryId"] = new SelectList(_context.Categories, "Id", "Name");
             return Page();
         }
-
-        [BindProperty]
-        public Advertisement Advertisement { get; set; }
 
         // To protect from overposting attacks, see https://aka.ms/RazorPagesCRUD
         public async Task<IActionResult> OnPostAsync()
         {
-            if (!ModelState.IsValid)
-            {
-                return Page();
-            }
+            if (!ModelState.IsValid) return Page();
 
             _context.Advertisements.Add(Advertisement);
             await _context.SaveChangesAsync();
