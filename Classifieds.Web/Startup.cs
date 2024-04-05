@@ -61,6 +61,13 @@ namespace Classifieds.Web
                 .AddPasswordValidator<PasswordValidatorService>()
                 .AddClaimsPrincipalFactory<CustomClaimsService>();
 
+            // add google authentication service
+            services.AddAuthentication().AddGoogle(options =>
+            {
+                options.ClientId = Configuration["Google:ClientId"];
+                options.ClientSecret = Configuration["Google:ClientSecret"];
+            });
+            
             // add policies
             services.AddAuthorization(options =>
             {
@@ -71,7 +78,7 @@ namespace Classifieds.Web
                 options.AddPolicy(Policies.IsMinimumAge,
                     policy => policy.RequireClaim(UserClaims.IsMinimumAge, "true"));
             });
-
+            
             // services.AddRazorPages().AddMvcOptions(q => q.Filters.Add(new AuthorizeFilter()));
             services.AddRazorPages();
         }
